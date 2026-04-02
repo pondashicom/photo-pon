@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8" />
+<meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data: file: blob:; connect-src 'self' data: file: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PHOTO-PON</title>
+    <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<header class="app-header">
+        <div>
+            <h1>PHOTO-PON</h1>
+        </div>
+    </header>
+
+    <main class="layout-root">
+        <section class="left-pane">
+            <div id="drop-zone" class="drop-zone">
+                ここへ画像をドロップ<br />
+                <span>jpg / png / webp / gif / tif / bmp / avif</span>
+            </div>
+
+            <div class="drop-actions">
+                <button id="add-files-button" class="secondary-button">画像を追加</button>
+                <button id="run-export-button" class="primary-button">書き出し</button>
+            </div>
+
+            <div class="progress-card">
+                <div class="progress-row">
+                    <span>進捗</span>
+                    <span id="progress-label">0 / 0</span>
+                </div>
+                <progress id="progress-bar" max="100" value="0"></progress>
+            </div>
+
+            <div class="list-header-row">
+                <span>画像リスト</span>
+                <span id="status-summary">0件</span>
+            </div>
+            <div id="image-list" class="image-list"></div>
+        </section>
+
+        <section class="right-pane">
+            <div class="preview-panel">
+                <div class="panel-title">元画像プレビュー</div>
+                <div class="preview-surface" id="source-preview-surface">
+                    <img id="source-preview-image" alt="source preview" />
+                    <div id="source-overlay" class="source-overlay"></div>
+                    <div id="empty-source" class="empty-message">画像を選択してください</div>
+                </div>
+            </div>
+
+            <div class="preview-panel preview-bottom-panel">
+                <div class="panel-title-row">
+                    <div class="panel-title">加工後プレビュー</div>
+                    <div class="adjustments-row">
+                        <label>ズーム <input id="zoom-range" type="range" min="0.5" max="2.5" step="0.05" value="1" /></label>
+                        <label>X <input id="offset-x-range" type="range" min="-400" max="400" step="1" value="0" /></label>
+                        <label>Y <input id="offset-y-range" type="range" min="-400" max="400" step="1" value="0" /></label>
+                        <label>透過閾値 <input id="alpha-threshold-range" type="range" min="0" max="255" step="1" value="24" /></label>
+                        <button id="reset-adjustments-button" class="small-button">初期状態</button>
+                        <button id="reprocess-button" class="small-button">再処理</button>
+                    </div>
+                </div>
+                <div class="preview-surface preview-output-surface" id="output-preview-surface">
+                    <img id="output-preview-image" alt="output preview" />
+                    <div id="empty-output" class="empty-message">加工後プレビュー</div>
+                </div>
+                <div class="meta-row" id="detail-meta"></div>
+            </div>
+        </section>
+    </main>
+
+    <dialog id="settings-dialog" class="settings-dialog">
+        <form method="dialog" id="settings-form">
+            <h2>処理設定</h2>
+            <div class="settings-grid">
+                <label>
+                    出力幅
+                    <input name="outputWidth" type="number" min="1" required />
+                </label>
+                <label>
+                    出力高さ
+                    <input name="outputHeight" type="number" min="1" required />
+                </label>
+                <label>
+                    出力形式
+                    <select name="outputFormat">
+                        <option value="jpeg">JPEG</option>
+                        <option value="png">PNG</option>
+                        <option value="webp">WebP</option>
+                    </select>
+                </label>
+                <label>
+                    出力モード
+                    <select name="outputMode">
+                        <option value="normal">通常</option>
+                        <option value="transparent-person-png">人物透過PNG</option>
+                    </select>
+                </label>
+                <label>
+                    最大容量(KB)
+                    <input name="maxFileSizeKB" type="number" min="1" required />
+                </label>
+                <label>
+                    顔サイズ比率
+                    <input name="faceHeightRatio" type="number" min="0.2" max="0.8" step="0.01" required />
+                </label>
+                <label>
+                    顔未検出時
+                    <select name="noFacePolicy">
+                        <option value="center-crop">中央トリミング</option>
+                        <option value="exception">例外扱い</option>
+                    </select>
+                </label>
+                <label>
+                    複数人検出時
+                    <select name="multiFacePolicy">
+                        <option value="largest-face-review">最大顔を採用して要確認</option>
+                        <option value="exception">例外扱い</option>
+                    </select>
+                </label>
+                <label>
+                    出力フォルダ名
+                    <input name="outputFolderName" type="text" required />
+                </label>
+            </div>
+            <div class="settings-note">
+                初回起動時はこの設定が必須です。保存後は次回起動時に自動適用されます。
+            </div>
+            <div class="dialog-actions">
+                <button value="cancel" class="secondary-button" id="settings-cancel-button">キャンセル</button>
+                <button value="save" class="primary-button" id="settings-save-button">保存</button>
+            </div>
+        </form>
+    </dialog>
+
+    <input id="hidden-file-input" type="file" accept="image/*" multiple hidden />
+
+    <script src="../node_modules/@vladmandic/human/dist/human.js"></script>
+    <script src="./renderer.js"></script>
+</body>
+</html>
