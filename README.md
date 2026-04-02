@@ -183,4 +183,4 @@ Photo-PON 本体は **GNU Affero General Public License v3.0 or later (AGPL-3.0-
 背景透過機能には `@imgly/background-removal-node` を使用しています。
 そのため、配布・改変・再頒布にあたっては、各ライセンス条件を確認してください。
 
-サードパーティライセンス一覧および notices は今後 `THIRD_PARTY_LICENSES.md` として整備予定です。
+サードパーティライセンス一覧および notices は `THIRD_PARTY_LICENSES.md` を参照してください。
