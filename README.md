@@ -169,4 +169,18 @@ npm run dist
 
 ## ライセンス
 
-ライセンス表記は今後整理予定です。
+Photo-PON 本体は **GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)** の下で公開します。
+
+本リポジトリには、以下の主なサードパーティライブラリを利用しています。
+
+- `@imgly/background-removal-node` - AGPL-3.0
+- `@vladmandic/human` - MIT
+- `electron-store` - MIT
+- `sharp` - Apache-2.0
+- `electron` - MIT
+- `electron-builder` - MIT
+
+背景透過機能には `@imgly/background-removal-node` を使用しています。
+そのため、配布・改変・再頒布にあたっては、各ライセンス条件を確認してください。
+
+サードパーティライセンス一覧および notices は今後 `THIRD_PARTY_LICENSES.md` として整備予定です。

@@ -1,6 +1,7 @@
 {
   "name": "photo-pon",
   "version": "0.2.0",
+  "license": "AGPL-3.0-or-later"
   "description": "Batch portrait crop prototype for Windows",
   "main": "src/main.js",
   "type": "commonjs",
