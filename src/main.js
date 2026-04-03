@@ -288,24 +288,51 @@ function makeCropRect({ sourceWidth, sourceHeight, outputWidth, outputHeight, de
     }
 
     if (manualAdjustments) {
-        const zoom = clamp(manualAdjustments.zoom ?? 1, 0.2, 4.0);
-        cropWidth = clamp(Math.round(cropWidth / zoom), 1, sourceWidth);
-        cropHeight = clamp(Math.round(cropHeight / zoom), 1, sourceHeight);
+        const zoom = Math.max(manualAdjustments.zoom ?? 1, 0.05);
+        cropWidth = Math.max(1, Math.round(cropWidth / zoom));
+        cropHeight = Math.max(1, Math.round(cropHeight / zoom));
         centerX += manualAdjustments.offsetX ?? 0;
         centerY += manualAdjustments.offsetY ?? 0;
     }
 
-    let left = Math.round(centerX - cropWidth / 2);
-    let top = Math.round(centerY - cropHeight / 2);
-
-    left = clamp(left, 0, Math.max(0, sourceWidth - cropWidth));
-    top = clamp(top, 0, Math.max(0, sourceHeight - cropHeight));
+    const left = Math.round(centerX - cropWidth / 2);
+    const top = Math.round(centerY - cropHeight / 2);
 
     if (!hasFace && detection?.faceCount > 1) {
         statusMessages.push('複数人検出');
     }
 
     return { left, top, width: cropWidth, height: cropHeight };
+}
+
+async function extractCropBuffer(sourceBuffer, cropRect) {
+    const metadata = await sharp(sourceBuffer, { animated: false }).metadata();
+    const sourceWidth = metadata.width || 0;
+    const sourceHeight = metadata.height || 0;
+
+    const extendLeft = Math.max(0, -cropRect.left);
+    const extendTop = Math.max(0, -cropRect.top);
+    const extendRight = Math.max(0, cropRect.left + cropRect.width - sourceWidth);
+    const extendBottom = Math.max(0, cropRect.top + cropRect.height - sourceHeight);
+
+    const extractLeft = cropRect.left + extendLeft;
+    const extractTop = cropRect.top + extendTop;
+
+    return sharp(sourceBuffer, { animated: false })
+        .extend({
+            left: extendLeft,
+            top: extendTop,
+            right: extendRight,
+            bottom: extendBottom,
+            background: { r: 0, g: 0, b: 0, alpha: 0 }
+        })
+        .extract({
+            left: extractLeft,
+            top: extractTop,
+            width: cropRect.width,
+            height: cropRect.height
+        })
+        .toBuffer();
 }
 
 async function encodeWithinLimit(inputBuffer, settings, formatOverride = null) {
@@ -383,8 +410,7 @@ async function renderExportBufferFromItem(item) {
         statusMessages: []
     });
 
-    const croppedBuffer = await sharp(workingSourceBuffer, { animated: false })
-        .extract(cropRect)
+    const croppedBuffer = await sharp(await extractCropBuffer(workingSourceBuffer, cropRect), { animated: false })
         .resize(Number(settings.outputWidth), Number(settings.outputHeight), {
             fit: 'cover',
             position: 'centre'
@@ -509,8 +535,7 @@ async function processImageJob(job) {
     let encoded = null;
 
     if (isTransparentMode) {
-        const croppedBuffer = await sharp(workingSourceBuffer, { animated: false })
-            .extract(cropRect)
+        const croppedBuffer = await sharp(await extractCropBuffer(workingSourceBuffer, cropRect), { animated: false })
             .resize(Number(settings.outputWidth), Number(settings.outputHeight), {
                 fit: 'cover',
                 position: 'centre'

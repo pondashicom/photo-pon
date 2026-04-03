@@ -268,18 +268,15 @@ function makePreviewCropRect(item) {
         centerY += cropHeight * 0.06;
     }
 
-    const zoom = clamp(Number(manualAdjustments.zoom ?? 1), 0.2, 4.0);
-    cropWidth = clamp(Math.round(cropWidth / zoom), 1, sourceWidth);
-    cropHeight = clamp(Math.round(cropHeight / zoom), 1, sourceHeight);
+    const zoom = Math.max(Number(manualAdjustments.zoom ?? 1), 0.05);
+    cropWidth = Math.max(1, Math.round(cropWidth / zoom));
+    cropHeight = Math.max(1, Math.round(cropHeight / zoom));
 
     centerX += Number(manualAdjustments.offsetX ?? 0);
     centerY += Number(manualAdjustments.offsetY ?? 0);
 
-    let left = Math.round(centerX - cropWidth / 2);
-    let top = Math.round(centerY - cropHeight / 2);
-
-    left = clamp(left, 0, Math.max(0, sourceWidth - cropWidth));
-    top = clamp(top, 0, Math.max(0, sourceHeight - cropHeight));
+    const left = Math.round(centerX - cropWidth / 2);
+    const top = Math.round(centerY - cropHeight / 2);
 
     return { left, top, width: cropWidth, height: cropHeight, hasFace };
 }
@@ -772,7 +769,7 @@ function updateAdjustmentValue(key, value, options = {}) {
     if (!item) return;
 
     const numericValue = key === 'zoom'
-        ? clamp(Number(value), 0.2, 4.0)
+        ? Math.max(Number(value), 0.05)
         : key === 'alphaThreshold'
             ? clamp(Math.round(Number(value)), 0, 255)
             : Number(value);
@@ -836,8 +833,8 @@ function installDropHandlers() {
 }
 
 function installEvents() {
-    elements.zoomRange.min = '0.2';
-    elements.zoomRange.max = '4.0';
+    elements.zoomRange.min = '0.05';
+    elements.zoomRange.max = '20.0';
     elements.zoomRange.step = '0.05';
 
     elements.addFilesButton.addEventListener('click', () => elements.hiddenFileInput.click());
@@ -874,7 +871,7 @@ function installEvents() {
         event.preventDefault();
 
         const currentZoom = Number(item.manualAdjustments?.zoom ?? 1);
-        const nextZoom = clamp(currentZoom + (event.deltaY < 0 ? 0.05 : -0.05), 0.2, 4.0);
+        const nextZoom = Math.max(currentZoom + (event.deltaY < 0 ? 0.05 : -0.05), 0.05);
         updateAdjustmentValue('zoom', nextZoom);
     }, { passive: false });
 
