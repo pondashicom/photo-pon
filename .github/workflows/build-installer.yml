@@ -2,9 +2,12 @@
 
 on:
     push:
-        branches:
-            - main
+        tags:
+            - "v*"
     workflow_dispatch:
+
+permissions:
+    contents: write
 
 jobs:
     build-windows-installer:
@@ -28,8 +31,10 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Build Windows installer
-              run: npm run dist
+            - name: Build and publish Windows installer
+              run: npm run dist -- --publish always
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: List dist files
               if: always()
@@ -42,10 +47,12 @@ jobs:
               shell: pwsh
 
             - name: Upload installer artifact
-              if: success()
+              if: always()
               uses: actions/upload-artifact@v4
               with:
                   name: PHOTO-PON-windows-installer
-                  path: dist/*.exe
-                  if-no-files-found: error
+                  path: |
+                      dist/*.exe
+                      dist/*.blockmap
+                  if-no-files-found: warn
                   retention-days: 14
