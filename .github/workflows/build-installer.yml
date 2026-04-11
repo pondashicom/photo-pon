@@ -15,10 +15,15 @@ jobs:
               uses: actions/checkout@v5
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: 20
                   cache: npm
+
+            - name: Show versions
+              run: |
+                  node -v
+                  npm -v
 
             - name: Install dependencies
               run: npm ci
@@ -26,9 +31,21 @@ jobs:
             - name: Build Windows installer
               run: npm run dist
 
+            - name: List dist files
+              if: always()
+              run: |
+                  if (Test-Path dist) {
+                      Get-ChildItem -Recurse dist
+                  } else {
+                      Write-Host "dist folder not found"
+                  }
+              shell: pwsh
+
             - name: Upload installer artifact
+              if: success()
               uses: actions/upload-artifact@v4
               with:
                   name: PHOTO-PON-windows-installer
                   path: dist/*.exe
+                  if-no-files-found: error
                   retention-days: 14
