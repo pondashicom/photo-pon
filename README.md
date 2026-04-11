@@ -135,7 +135,11 @@ npm run pack
 npm run dist
 ```
 
-ビルド成果物は通常 `dist` フォルダに出力されます。
+ローカルでビルドした成果物は通常 `dist` フォルダに出力されます。
+
+GitHub Actions で自動ビルドされた最新版の Windows インストーラーは、以下から取得できます。
+
+- [Build Windows Installer](https://github.com/pondashicom/photo-pon/actions/workflows/build-installer.yml)
 
 ---
 
