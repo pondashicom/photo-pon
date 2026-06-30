@@ -333,15 +333,20 @@ async function extractCropBuffer(sourceBuffer, cropRect) {
     const sourceWidth = metadata.width || 0;
     const sourceHeight = metadata.height || 0;
 
-    const extendLeft = Math.max(0, -cropRect.left);
-    const extendTop = Math.max(0, -cropRect.top);
-    const extendRight = Math.max(0, cropRect.left + cropRect.width - sourceWidth);
-    const extendBottom = Math.max(0, cropRect.top + cropRect.height - sourceHeight);
+    const cropLeft = Math.round(Number(cropRect.left) || 0);
+    const cropTop = Math.round(Number(cropRect.top) || 0);
+    const cropWidth = Math.max(1, Math.round(Number(cropRect.width) || 1));
+    const cropHeight = Math.max(1, Math.round(Number(cropRect.height) || 1));
 
-    const extractLeft = cropRect.left + extendLeft;
-    const extractTop = cropRect.top + extendTop;
+    const extendLeft = Math.max(0, -cropLeft);
+    const extendTop = Math.max(0, -cropTop);
+    const extendRight = Math.max(0, cropLeft + cropWidth - sourceWidth);
+    const extendBottom = Math.max(0, cropTop + cropHeight - sourceHeight);
 
-    return sharp(sourceBuffer, { animated: false })
+    const extractLeft = cropLeft + extendLeft;
+    const extractTop = cropTop + extendTop;
+
+    const extendedBuffer = await sharp(sourceBuffer, { animated: false })
         .extend({
             left: extendLeft,
             top: extendTop,
@@ -349,11 +354,14 @@ async function extractCropBuffer(sourceBuffer, cropRect) {
             bottom: extendBottom,
             background: { r: 0, g: 0, b: 0, alpha: 0 }
         })
+        .toBuffer();
+
+    return sharp(extendedBuffer, { animated: false })
         .extract({
             left: extractLeft,
             top: extractTop,
-            width: cropRect.width,
-            height: cropRect.height
+            width: cropWidth,
+            height: cropHeight
         })
         .toBuffer();
 }
@@ -401,6 +409,14 @@ async function renderExportBufferFromItem(item) {
         .rotate()
         .toBuffer();
 
+    const metadata = await sharp(orientedSourceBuffer).metadata();
+    const sourceWidth = Number(item.sourceWidth) || metadata.width;
+    const sourceHeight = Number(item.sourceHeight) || metadata.height;
+
+    if (!sourceWidth || !sourceHeight) {
+        throw new Error('画像サイズの取得に失敗しました。');
+    }
+
     let workingSourceBuffer = orientedSourceBuffer;
 
     if (isTransparentMode) {
@@ -424,8 +440,8 @@ async function renderExportBufferFromItem(item) {
     }
 
     const cropRect = makeCropRect({
-        sourceWidth: item.sourceWidth,
-        sourceHeight: item.sourceHeight,
+        sourceWidth,
+        sourceHeight,
         outputWidth: Number(settings.outputWidth),
         outputHeight: Number(settings.outputHeight),
         detection: item.detection,
@@ -631,6 +647,21 @@ function buildExportFolderName(baseName) {
     return `${baseName}_${yyyy}${mm}${dd}_${hh}${mi}`;
 }
 
+function buildUniqueDestinationPath(targetDir, filename, reservedPaths) {
+    const ext = path.extname(filename);
+    const base = path.basename(filename, ext);
+    let candidate = path.join(targetDir, filename);
+    let index = 2;
+
+    while (reservedPaths.has(candidate) || fs.existsSync(candidate)) {
+        candidate = path.join(targetDir, `${base}-${index}${ext}`);
+        index += 1;
+    }
+
+    reservedPaths.add(candidate);
+    return candidate;
+}
+
 ipcMain.handle('settings:get', async () => getSettings());
 
 ipcMain.handle('settings:save', async (_event, nextSettings) => {
@@ -681,21 +712,43 @@ ipcMain.handle('export:run', async (_event, payload) => {
         const selectedBaseDir = dialogResult.filePaths[0];
         const targetDir = path.join(selectedBaseDir, outputFolderName);
         const results = [];
+        const failures = [];
+        const reservedDestinations = new Set();
 
         await fsp.mkdir(targetDir, { recursive: true });
 
         for (const item of exportableItems) {
-            const rendered = await renderExportBufferFromItem(item);
-            const ext = rendered.outputFormat || getSettings().outputFormat;
-            const basename = path.basename(item.filePath, path.extname(item.filePath));
-            const filename = `${basename}.${ext}`;
-            const destination = path.join(targetDir, filename);
+            try {
+                const rendered = await renderExportBufferFromItem(item);
+                const ext = rendered.outputFormat || getSettings().outputFormat;
+                const basename = path.basename(item.filePath, path.extname(item.filePath));
+                const filename = `${basename}.${ext}`;
+                const destination = buildUniqueDestinationPath(targetDir, filename, reservedDestinations);
 
-            await fsp.writeFile(destination, rendered.buffer);
-            results.push({ source: item.filePath, destination });
+                await fsp.writeFile(destination, rendered.buffer);
+                results.push({ source: item.filePath, destination });
+            } catch (error) {
+                const failure = {
+                    source: item.filePath,
+                    message: error?.message || String(error)
+                };
+                failures.push(failure);
+                console.error('[export] item-failed', failure);
+            }
         }
 
-        return { ok: true, count: results.length, results, targetDir };
+        if (results.length === 0 && failures.length > 0) {
+            return {
+                ok: false,
+                message: `${failures.length}件の書き出しに失敗しました。`,
+                count: 0,
+                failedCount: failures.length,
+                failures,
+                targetDir
+            };
+        }
+
+        return { ok: true, count: results.length, failedCount: failures.length, failures, results, targetDir };
     } finally {
         isExporting = false;
     }

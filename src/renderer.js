@@ -50,6 +50,11 @@ const elements = {
     reprocessButton: document.getElementById('reprocess-button')
 };
 
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 4.0;
+const ZOOM_SLIDER_STEP = 0.01;
+const ZOOM_WHEEL_RATE = 0.018;
+
 function createId() {
     return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -92,6 +97,7 @@ function updateSummary() {
 
     elements.progressBar.value = percent;
     elements.progressLabel.textContent = `${doneCount} / ${total}`;
+    elements.runExportButton.disabled = total === 0 || state.isProcessing;
     elements.statusSummary.textContent = `${total}件 / 要確認 ${reviewCount} / 例外 ${exceptionCount}`;
 }
 
@@ -214,6 +220,12 @@ function renderOverlay(item) {
 
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+}
+
+function normalizeZoom(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 1;
+    return clamp(numericValue, ZOOM_MIN, ZOOM_MAX);
 }
 
 function constrainCropSizeToSource(cropWidth, cropHeight, sourceWidth, sourceHeight, targetRatio) {
@@ -751,20 +763,27 @@ async function processNewFiles(filePaths) {
     }
 
     renderList();
+    state.isProcessing = true;
+    renderList();
 
-    if (itemsToProcess[0]) {
-        setSelectedItem(itemsToProcess[0].id);
-    }
+    try {
+        if (itemsToProcess[0]) {
+            setSelectedItem(itemsToProcess[0].id);
+        }
 
-    for (const item of itemsToProcess) {
-        await processItem(item);
+        for (const item of itemsToProcess) {
+            await processItem(item);
+        }
+    } finally {
+        state.isProcessing = false;
+        renderList();
     }
 }
 
 function syncAdjustmentControls() {
     const item = getSelectedItem();
     const adjustments = item?.manualAdjustments || { zoom: 1, offsetX: 0, offsetY: 0, alphaThreshold: 24 };
-    elements.zoomRange.value = String(adjustments.zoom ?? 1);
+    elements.zoomRange.value = String(normalizeZoom(adjustments.zoom ?? 1));
     elements.offsetXRange.value = String(adjustments.offsetX ?? 0);
     elements.offsetYRange.value = String(adjustments.offsetY ?? 0);
     elements.alphaThresholdRange.value = String(adjustments.alphaThreshold ?? 24);
@@ -791,7 +810,7 @@ function updateAdjustmentValue(key, value, options = {}) {
     if (!item) return;
 
     const numericValue = key === 'zoom'
-        ? Math.max(Number(value), 0.05)
+        ? normalizeZoom(value)
         : key === 'alphaThreshold'
             ? clamp(Math.round(Number(value)), 0, 255)
             : Number(value);
@@ -813,15 +832,32 @@ async function reprocessSelected() {
 }
 
 async function exportAll() {
-    const result = await window.photoPon.exportItems(state.items);
+    if (state.isProcessing) {
+        window.alert('画像処理中です。処理完了後に書き出してください。');
+        return;
+    }
+
+    let result;
+    try {
+        result = await window.photoPon.exportItems(state.items);
+    } catch (error) {
+        window.alert(`書き出しに失敗しました。\n${error?.message || error}`);
+        return;
+    }
     if (!result.ok) {
         if (result.canceled) {
             return;
         }
-        window.alert(result.message);
+        const details = Array.isArray(result.failures) && result.failures.length > 0
+            ? `\n${result.failures.map((failure) => `${failure.source}: ${failure.message}`).slice(0, 5).join('\n')}`
+            : '';
+        window.alert(`${result.message}${details}`);
         return;
     }
-    window.alert(`${result.count}件を書き出しました。\n${result.targetDir}`);
+    const failedMessage = result.failedCount
+        ? `\n失敗 ${result.failedCount}件`
+        : '';
+    window.alert(`${result.count}件を書き出しました。${failedMessage}\n${result.targetDir}`);
 }
 
 function installDropHandlers() {
@@ -855,9 +891,9 @@ function installDropHandlers() {
 }
 
 function installEvents() {
-    elements.zoomRange.min = '0.05';
-    elements.zoomRange.max = '20.0';
-    elements.zoomRange.step = '0.05';
+    elements.zoomRange.min = String(ZOOM_MIN);
+    elements.zoomRange.max = String(ZOOM_MAX);
+    elements.zoomRange.step = String(ZOOM_SLIDER_STEP);
 
     elements.addFilesButton.addEventListener('click', () => elements.hiddenFileInput.click());
     elements.hiddenFileInput.addEventListener('change', async (event) => {
@@ -885,16 +921,16 @@ function installEvents() {
     elements.alphaThresholdRange.addEventListener('input', (event) => updateAdjustmentValue('alphaThreshold', event.target.value));
 
     elements.outputPreviewSurface.addEventListener('wheel', (event) => {
-        if (!event.ctrlKey) return;
-
         const item = getSelectedItem();
         if (!item) return;
 
         event.preventDefault();
 
-        const currentZoom = Number(item.manualAdjustments?.zoom ?? 1);
-        const nextZoom = Math.max(currentZoom + (event.deltaY < 0 ? 0.05 : -0.05), 0.05);
-        updateAdjustmentValue('zoom', nextZoom);
+        const currentZoom = normalizeZoom(item.manualAdjustments?.zoom ?? 1);
+        const direction = event.deltaY < 0 ? 1 : -1;
+        const wheelUnits = clamp(Math.abs(event.deltaY) / 100, 0.25, 2);
+        const nextZoom = normalizeZoom(currentZoom * Math.exp(direction * wheelUnits * ZOOM_WHEEL_RATE));
+        updateAdjustmentValue('zoom', Math.round(nextZoom * 1000) / 1000);
     }, { passive: false });
 
     elements.outputPreviewSurface.addEventListener('mousedown', (event) => {
