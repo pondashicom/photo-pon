@@ -12,7 +12,7 @@ const state = {
         detector: 'uninitialized'
     },
     ui: {
-        reprocessTimer: null,
+        adjustmentPreviewFrameRequest: null,
         isDraggingOutput: false,
         dragStartClientX: 0,
         dragStartClientY: 0,
@@ -403,12 +403,26 @@ function applyOutputPreviewTransform(item) {
 
     elements.outputPreviewImage.style.width = `${transform.width}px`;
     elements.outputPreviewImage.style.height = `${transform.height}px`;
-    elements.outputPreviewImage.style.left = `${transform.left}px`;
-    elements.outputPreviewImage.style.top = `${transform.top}px`;
+    elements.outputPreviewImage.style.left = '0px';
+    elements.outputPreviewImage.style.top = '0px';
     elements.outputPreviewImage.style.maxWidth = 'none';
     elements.outputPreviewImage.style.maxHeight = 'none';
     elements.outputPreviewImage.style.objectFit = 'fill';
-    elements.outputPreviewImage.style.transform = 'none';
+    elements.outputPreviewImage.style.transform = `translate3d(${transform.left}px, ${transform.top}px, 0)`;
+}
+
+function scheduleAdjustmentPreview(itemId) {
+    if (state.ui.adjustmentPreviewFrameRequest) return;
+
+    state.ui.adjustmentPreviewFrameRequest = window.requestAnimationFrame(() => {
+        state.ui.adjustmentPreviewFrameRequest = null;
+        const item = state.items.find((candidate) => candidate.id === itemId);
+        if (!item) return;
+        if (item.id !== state.selectedId) return;
+
+        renderOverlay(item);
+        applyOutputPreviewTransform(item);
+    });
 }
 
 function renderPreview() {
@@ -792,36 +806,28 @@ function syncAdjustmentControls() {
     elements.alphaThresholdRange.disabled = !isTransparentMode;
 }
 
-function scheduleReprocessSelected(delay = 180) {
-    if (state.ui.reprocessTimer) {
-        clearTimeout(state.ui.reprocessTimer);
-    }
-
-    state.ui.reprocessTimer = setTimeout(async () => {
-        state.ui.reprocessTimer = null;
-        const item = getSelectedItem();
-        if (!item) return;
-        await processItem(item);
-    }, delay);
-}
-
-function updateAdjustmentValue(key, value, options = {}) {
+function applyAdjustmentPatch(patch, options = {}) {
     const item = getSelectedItem();
     if (!item) return;
 
+    const manualAdjustments = { ...(item.manualAdjustments || {}), ...patch };
+    patchItem(item.id, { manualAdjustments });
+
+    if (options.syncControls !== false) {
+        syncAdjustmentControls();
+    }
+
+    scheduleAdjustmentPreview(item.id);
+}
+
+function updateAdjustmentValue(key, value) {
     const numericValue = key === 'zoom'
         ? normalizeZoom(value)
         : key === 'alphaThreshold'
             ? clamp(Math.round(Number(value)), 0, 255)
             : Number(value);
 
-    const manualAdjustments = { ...(item.manualAdjustments || {}), [key]: numericValue };
-    patchItem(item.id, { manualAdjustments });
-    syncAdjustmentControls();
-    renderPreview();
-
-    if (options.skipReprocess) return;
-    scheduleReprocessSelected();
+    applyAdjustmentPatch({ [key]: numericValue });
 }
 
 async function reprocessSelected() {
@@ -959,8 +965,13 @@ function installEvents() {
         const nextOffsetX = state.ui.dragStartOffsetX - deltaX;
         const nextOffsetY = state.ui.dragStartOffsetY - deltaY;
 
-        updateAdjustmentValue('offsetX', nextOffsetX, { skipReprocess: true });
-        updateAdjustmentValue('offsetY', nextOffsetY, { skipReprocess: true });
+        applyAdjustmentPatch(
+            {
+                offsetX: nextOffsetX,
+                offsetY: nextOffsetY
+            },
+            { syncControls: false }
+        );
     });
 
     window.addEventListener('mouseup', () => {
@@ -968,7 +979,7 @@ function installEvents() {
 
         state.ui.isDraggingOutput = false;
         elements.outputPreviewSurface.classList.remove('dragging');
-        scheduleReprocessSelected();
+        syncAdjustmentControls();
     });
 
     window.addEventListener('resize', () => {
