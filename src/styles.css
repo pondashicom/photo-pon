@@ -308,6 +308,17 @@ select {
     background: rgba(86, 166, 255, 0.12);
 }
 
+.face-box {
+    border-color: rgba(86, 166, 255, 0.95);
+    background: rgba(86, 166, 255, 0.12);
+}
+
+.crop-box {
+    border-color: rgba(255, 196, 87, 0.98);
+    background: rgba(255, 196, 87, 0.08);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+
 .adjustments-row {
     display: flex;
     align-items: center;

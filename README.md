@@ -137,10 +137,11 @@ npm run dist
 
 ローカルでビルドした成果物は通常 `dist` フォルダに出力されます。
 
-GitHub Actions で自動ビルドされた最新版の Windows インストーラーは、以下から取得できます。
+最新版の Windows インストーラーは、以下の Releases ページからもダウンロードできます。
 
-- [Build Windows Installer](https://github.com/pondashicom/photo-pon/actions/workflows/build-installer.yml)
+- [Download the latest installer](https://github.com/pondashicom/photo-pon/releases/latest)
 
+ページ内の Assets から `.exe` ファイルを選んでください。
 ---
 
 ## 推奨配置

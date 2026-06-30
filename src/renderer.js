@@ -190,7 +190,7 @@ function renderOverlay(item) {
     const boxes = [];
     if (Array.isArray(item.detection?.faces)) {
         for (const face of item.detection.faces) {
-            boxes.push({ ...face, className: 'overlay-box' });
+            boxes.push({ ...face, className: 'overlay-box face-box' });
         }
     }
 
@@ -214,6 +214,31 @@ function renderOverlay(item) {
 
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+}
+
+function constrainCropSizeToSource(cropWidth, cropHeight, sourceWidth, sourceHeight, targetRatio) {
+    let nextWidth = Math.max(1, Math.round(cropWidth));
+    let nextHeight = Math.max(1, Math.round(cropHeight));
+
+    if (nextWidth > sourceWidth) {
+        nextWidth = sourceWidth;
+        nextHeight = Math.max(1, Math.round(nextWidth / targetRatio));
+    }
+
+    if (nextHeight > sourceHeight) {
+        nextHeight = sourceHeight;
+        nextWidth = Math.max(1, Math.round(nextHeight * targetRatio));
+    }
+
+    if (nextWidth > sourceWidth) {
+        nextWidth = sourceWidth;
+        nextHeight = Math.max(1, Math.round(nextWidth / targetRatio));
+    }
+
+    return {
+        width: nextWidth,
+        height: nextHeight
+    };
 }
 
 // 加工後プレビュー用の切り抜き範囲を計算する関数
@@ -251,19 +276,16 @@ function makePreviewCropRect(item) {
         const desiredFaceHeight = outputHeight * (manualAdjustments.faceHeightRatio ?? detection.faceHeightRatio ?? 0.45);
         const zoomFactor = face.height > 0 ? desiredFaceHeight / face.height : 1;
         const normalizedZoom = clamp(zoomFactor, 0.4, 3.0);
+        const constrainedCrop = constrainCropSizeToSource(
+            Math.round((sourceHeight / normalizedZoom) * targetRatio),
+            Math.round(sourceHeight / normalizedZoom),
+            sourceWidth,
+            sourceHeight,
+            targetRatio
+        );
 
-        cropHeight = clamp(Math.round(sourceHeight / normalizedZoom), 1, sourceHeight);
-        cropWidth = clamp(Math.round(cropHeight * targetRatio), 1, sourceWidth);
-
-        if (cropWidth > sourceWidth) {
-            cropWidth = sourceWidth;
-            cropHeight = clamp(Math.round(cropWidth / targetRatio), 1, sourceHeight);
-        }
-
-        if (cropHeight > sourceHeight) {
-            cropHeight = sourceHeight;
-            cropWidth = clamp(Math.round(cropHeight * targetRatio), 1, sourceWidth);
-        }
+        cropWidth = constrainedCrop.width;
+        cropHeight = constrainedCrop.height;
 
         centerY += cropHeight * 0.06;
     }
